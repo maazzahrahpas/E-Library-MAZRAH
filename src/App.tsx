@@ -165,8 +165,8 @@ function AppContent() {
           )}
 
           {authErrorNotice && (
-            <div className="rounded-2xl p-3.5 sm:px-5 border border-rose-200 bg-rose-50 text-rose-900 shadow-sm flex items-center justify-between gap-3 text-xs">
-              <p className="font-semibold">{authErrorNotice}</p>
+            <div className="rounded-2xl p-3.5 sm:px-5 border border-rose-200 bg-rose-50 text-rose-900 shadow-sm flex items-start justify-between gap-3 text-xs">
+              <p className="font-semibold whitespace-pre-line leading-relaxed">{authErrorNotice}</p>
               <button
                 onClick={dismissAuthErrorNotice}
                 className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100 font-bold text-rose-700 border border-rose-200 shrink-0"

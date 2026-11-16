@@ -1,7 +1,16 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
-import { auth, db, googleProvider, signInWithPopup, handleFirestoreError, OperationType } from '../firebase/config';
+import {
+  auth,
+  db,
+  googleProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  handleFirestoreError,
+  OperationType
+} from '../firebase/config';
 import { UserProfile, UserRole } from '../types/library';
 
 export interface DailyRewardNotice {
@@ -79,6 +88,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userProfileRef.current = next;
     setUserProfile(next);
   };
+
+  // Handle redirect result if standalone redirect login was triggered (e.g. mobile/Vercel)
+  useEffect(() => {
+    getRedirectResult(auth).catch((error: unknown) => {
+      const code = (error as { code?: string })?.code;
+      if (code && code !== 'auth/cancelled-popup-request' && code !== 'auth/popup-closed-by-user') {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'domain ini';
+        if (code === 'auth/unauthorized-domain') {
+          setAuthErrorNotice(
+            `Domain "${currentHost}" belum diizinkan untuk login Google.\nBuka Firebase Console -> Authentication -> Settings -> Authorized domains, lalu tambahkan "${currentHost}".`
+          );
+        } else {
+          setAuthErrorNotice(`Login Google gagal (${code}). Silakan coba kembali.`);
+        }
+      }
+    });
+  }, []);
 
   // Initialize Auth state listener with realtime profile sync from Cloud Firestore
   useEffect(() => {
@@ -258,25 +284,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithGoogle = async () => {
+    const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'domain ini';
+    let isInIframe = false;
+    try {
+      isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+    } catch {
+      isInIframe = true;
+    }
+
     try {
       setAuthErrorNotice(null);
       setLoading(true);
       await signInWithPopup(auth, googleProvider);
     } catch (error: unknown) {
-      const code = (error as { code?: string })?.code;
-      if (code === 'auth/popup-blocked') {
+      const code = (error as { code?: string; message?: string })?.code || '';
+      const message = (error as { message?: string })?.message || '';
+
+      if (code === 'auth/unauthorized-domain') {
+        console.error('Unauthorized domain for Firebase Auth:', currentHost, error);
         setAuthErrorNotice(
-          'Popup Google Sign-In diblokir oleh browser. Harap izinkan popup di peramban Anda untuk melanjutkan login.'
+          `Domain Vercel "${currentHost}" belum terdaftar di Firebase Authentication.\nSolusi: Buka Firebase Console -> Authentication -> Settings -> Authorized domains -> Add domain, lalu masukkan "${currentHost}".`
         );
+      } else if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment' ||
+        code === 'auth/web-storage-unsupported'
+      ) {
+        if (!isInIframe) {
+          try {
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          } catch (redirectError: unknown) {
+            const rCode = (redirectError as { code?: string })?.code || code;
+            console.error('Google Redirect Sign In Error:', redirectError);
+            setAuthErrorNotice(
+              rCode === 'auth/unauthorized-domain'
+                ? `Domain "${currentHost}" belum terdaftar di Authorized Domains Firebase Authentication.`
+                : `Gagal membuka halaman login Google (${rCode}). Pastikan popup & cookie diizinkan pada browser Anda.`
+            );
+          }
+        } else {
+          setAuthErrorNotice(
+            'Popup Google Sign-In diblokir oleh browser. Harap izinkan popup di peramban Anda untuk melanjutkan login.'
+          );
+        }
       } else if (
         code === 'auth/cancelled-popup-request' ||
         code === 'auth/popup-closed-by-user'
       ) {
         console.info('Jendela Google Sign-In ditutup oleh pengguna.');
+      } else if (code === 'auth/operation-not-allowed') {
+        console.error('Google Sign-In provider not enabled:', error);
+        setAuthErrorNotice(
+          'Metode login Google belum diaktifkan di Firebase Console (Authentication -> Sign-in method -> Google).'
+        );
+      } else if (code === 'auth/network-request-failed') {
+        console.error('Network error during Google Sign In:', error);
+        setAuthErrorNotice(
+          'Koneksi ke server autentikasi Google gagal. Periksa koneksi internet atau matikan pemblokir iklan/ekstensi privasi.'
+        );
+      } else if (
+        code.includes('api-key') ||
+        code === 'auth/app-not-authorized' ||
+        message.includes('referer')
+      ) {
+        console.error('Firebase API Key / Referrer restriction error:', error);
+        setAuthErrorNotice(
+          `Akses API Firebase dibatasi untuk domain "${currentHost}" (${code || 'referrer-blocked'}). Periksa pengaturan HTTP referrers API Key di Google Cloud Console.`
+        );
       } else {
         console.error('Google Sign In Error:', error);
         setAuthErrorNotice(
-          'Terjadi kendala saat menghubungkan akun Google. Silakan periksa koneksi internet Anda atau coba kembali.'
+          `Terjadi kendala saat menghubungkan akun Google (${code || 'unknown-error'}). Silakan coba kembali atau periksa Authorized Domains di Firebase Console.`
         );
       }
     } finally {
