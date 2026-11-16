@@ -37,6 +37,8 @@ export interface Book {
   format: 'pdf' | 'epub' | 'physical';
   coverUrl: string;
   fileUrl?: string;
+  pdfFileName?: string;
+  pdfFileSize?: number;
   contentSnippet?: string; // Content for internal digital reader preview
   availableCopies: number;
   totalCopies: number;

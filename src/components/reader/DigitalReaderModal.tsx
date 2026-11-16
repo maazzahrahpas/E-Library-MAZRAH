@@ -13,7 +13,10 @@ import {
   Sparkles,
   Share2,
   Clock,
-  Flame
+  Flame,
+  FileText,
+  Download,
+  BookOpen
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Book } from '../../types/library';
@@ -46,6 +49,10 @@ export const DigitalReaderModal: React.FC<DigitalReaderModalProps> = ({
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [showCelebration, setShowCelebration] = useState(false);
 
+  const hasUploadedPdf = book.format === 'pdf' && Boolean(book.fileUrl);
+  const [viewMode, setViewMode] = useState<'pdf' | 'text'>(hasUploadedPdf ? 'pdf' : 'text');
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
   const currentPageRef = useRef<number>(initialPage);
   const syncedMinutesRef = useRef<number>(0);
   const elapsedSecondsRef = useRef<number>(0);
@@ -53,6 +60,42 @@ export const DigitalReaderModal: React.FC<DigitalReaderModalProps> = ({
   useEffect(() => {
     currentPageRef.current = currentPage;
   }, [currentPage]);
+
+  // Safely convert inline base64 PDF Data URLs to a Blob URL so browsers render PDFs smoothly
+  useEffect(() => {
+    if (!hasUploadedPdf || !book.fileUrl) {
+      setPdfBlobUrl(null);
+      return;
+    }
+
+    if (!book.fileUrl.startsWith('data:')) {
+      setPdfBlobUrl(book.fileUrl);
+      return;
+    }
+
+    let objectUrl: string | null = null;
+    try {
+      const commaIdx = book.fileUrl.indexOf(',');
+      const base64Part = commaIdx >= 0 ? book.fileUrl.slice(commaIdx + 1) : '';
+      const binaryStr = window.atob(base64Part);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      objectUrl = URL.createObjectURL(blob);
+      setPdfBlobUrl(objectUrl);
+    } catch {
+      setPdfBlobUrl(book.fileUrl);
+    }
+
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [hasUploadedPdf, book.fileUrl]);
 
   // Real-time reading session timer: syncs elapsed whole minutes accurately every 60s
   useEffect(() => {
@@ -233,6 +276,44 @@ export const DigitalReaderModal: React.FC<DigitalReaderModalProps> = ({
             </div>
           )}
 
+          {hasUploadedPdf && pdfBlobUrl && (
+            <div className="flex items-center gap-1">
+              <div className="flex items-center bg-gray-100 rounded-xl p-0.5 text-xs font-semibold">
+                <button
+                  onClick={() => setViewMode('pdf')}
+                  className={`px-2.5 py-1 rounded-lg flex items-center gap-1 ${
+                    viewMode === 'pdf' ? 'bg-white shadow-xs text-purple-700' : 'text-gray-600'
+                  }`}
+                  title="Tampilkan Dokumen PDF Asli"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">PDF</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('text')}
+                  className={`px-2.5 py-1 rounded-lg flex items-center gap-1 ${
+                    viewMode === 'text' ? 'bg-white shadow-xs text-purple-700' : 'text-gray-600'
+                  }`}
+                  title="Tampilkan Mode Teks"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Teks</span>
+                </button>
+              </div>
+              <a
+                href={pdfBlobUrl}
+                download={book.pdfFileName || `${book.title}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 flex items-center gap-1 transition-colors"
+                title="Unduh File PDF"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden lg:inline">Unduh</span>
+              </a>
+            </div>
+          )}
+
           {/* Bookmark Button */}
           <button
             onClick={toggleBookmark}
@@ -311,36 +392,46 @@ export const DigitalReaderModal: React.FC<DigitalReaderModalProps> = ({
       </header>
 
       {/* Main Reading Page Content */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex items-center justify-center">
-        <div
-          className={`w-full max-w-3xl min-h-[520px] rounded-2xl p-6 sm:p-12 shadow-2xl border transition-all flex flex-col justify-between ${themeStyles[theme]}`}
-        >
-          {/* Chapter header */}
-          <div className="border-b pb-4 mb-6 border-current/15 flex items-center justify-between">
-            <span className="text-xs uppercase tracking-widest font-bold opacity-70">
-              {book.category} &bull; MA AZ ZAHRAH
-            </span>
-            <span className="text-xs font-semibold opacity-70">
-              Hal {currentPage} dari {totalPages}
-            </span>
+      <main className="flex-1 overflow-y-auto p-3 sm:p-6 flex items-center justify-center">
+        {hasUploadedPdf && viewMode === 'pdf' && pdfBlobUrl ? (
+          <div className="w-full max-w-5xl h-full min-h-[70vh] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
+            <iframe
+              src={pdfBlobUrl}
+              title={book.title}
+              className="w-full flex-1 min-h-[68vh] border-0"
+            />
           </div>
+        ) : (
+          <div
+            className={`w-full max-w-3xl min-h-[520px] rounded-2xl p-6 sm:p-12 shadow-2xl border transition-all flex flex-col justify-between ${themeStyles[theme]}`}
+          >
+            {/* Chapter header */}
+            <div className="border-b pb-4 mb-6 border-current/15 flex items-center justify-between">
+              <span className="text-xs uppercase tracking-widest font-bold opacity-70">
+                {book.category} &bull; MA AZ ZAHRAH
+              </span>
+              <span className="text-xs font-semibold opacity-70">
+                Hal {currentPage} dari {totalPages}
+              </span>
+            </div>
 
-          {/* Book Content */}
-          <div className="flex-1 space-y-4">
-            <h3 className="text-xl sm:text-2xl font-black mb-4">
-              {currentChapter.title}
-            </h3>
-            <div className={`space-y-4 whitespace-pre-line font-serif ${fontSizes[fontSize]}`}>
-              {currentChapter.text}
+            {/* Book Content */}
+            <div className="flex-1 space-y-4">
+              <h3 className="text-xl sm:text-2xl font-black mb-4">
+                {currentChapter.title}
+              </h3>
+              <div className={`space-y-4 whitespace-pre-line font-serif ${fontSizes[fontSize]}`}>
+                {currentChapter.text}
+              </div>
+            </div>
+
+            {/* Chapter footer note */}
+            <div className="pt-6 border-t border-current/15 mt-6 flex items-center justify-between text-xs opacity-60">
+              <span>E-Library MAZRAH Pasuruan</span>
+              <span>Kemajuan: {progressPercent}%</span>
             </div>
           </div>
-
-          {/* Chapter footer note */}
-          <div className="pt-6 border-t border-current/15 mt-6 flex items-center justify-between text-xs opacity-60">
-            <span>E-Library MAZRAH Pasuruan</span>
-            <span>Kemajuan: {progressPercent}%</span>
-          </div>
-        </div>
+        )}
       </main>
 
       {/* Khatam Celebration Overlay */}

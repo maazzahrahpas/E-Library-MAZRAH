@@ -15,11 +15,14 @@ import {
   CheckCircle2,
   AlertCircle,
   Trash2,
-  Edit3
+  Edit3,
+  Upload,
+  FileText
 } from 'lucide-react';
 import { Book } from '../../types/library';
 import { useLibrary } from '../../context/LibraryContext';
 import { useAuth } from '../../context/AuthContext';
+import { compressCoverImage } from '../../utils/fileUpload';
 
 interface BookDetailModalProps {
   book: Book;
@@ -56,6 +59,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const [editYear, setEditYear] = useState(book.year);
   const [editCategory, setEditCategory] = useState(book.category);
   const [editCopies, setEditCopies] = useState(book.totalCopies);
+  const [editCoverUrl, setEditCoverUrl] = useState(book.coverUrl);
   const [editSynopsis, setEditSynopsis] = useState(book.synopsis);
 
   // Review state
@@ -108,6 +112,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       category: editCategory,
       totalCopies: editCopies,
       availableCopies: nextAvailable,
+      coverUrl: editCoverUrl,
       synopsis: editSynopsis
     });
     setIsEditingBook(false);
@@ -281,6 +286,36 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </div>
 
               <div>
+                <label className="block font-bold text-gray-700 mb-1">Foto Cover Buku:</label>
+                <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-purple-200">
+                  <img
+                    src={editCoverUrl}
+                    alt={editTitle}
+                    className="w-10 h-14 object-cover rounded-lg border border-gray-200 shrink-0"
+                  />
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold rounded-lg transition-colors">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Ganti Foto Cover</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const compressed = await compressCoverImage(file);
+                          setEditCoverUrl(compressed);
+                        } catch {
+                          // ignore invalid file
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div>
                 <label className="block font-bold text-gray-700 mb-1">Sinopsis:</label>
                 <textarea
                   rows={3}
@@ -391,6 +426,12 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>{book.availableCopies} dari {book.totalCopies} Eksemplar</span>
                 </div>
+                {book.format === 'pdf' && book.fileUrl && (
+                  <div className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 bg-blue-50 text-blue-800 rounded-xl border border-blue-200">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span>PDF Asli Tersedia</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   BookOpen,
   Plus,
@@ -7,13 +7,17 @@ import {
   Trash2,
   Download,
   Upload,
-  Check,
   X,
-  Layers,
-  Star
+  Star,
+  Image as ImageIcon,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { useLibrary } from '../../context/LibraryContext';
 import { Book } from '../../types/library';
+import { compressCoverImage, uploadPdfFile, formatFileSize } from '../../utils/fileUpload';
 
 export const BookManagement: React.FC = () => {
   const { books, categories, addBook, updateBook, deleteBook } = useLibrary();
@@ -33,8 +37,21 @@ export const BookManagement: React.FC = () => {
   const [format, setFormat] = useState<'pdf' | 'physical'>('pdf');
   const [classLevel, setClassLevel] = useState<'Semua' | 'X' | 'XI' | 'XII'>('Semua');
   const [totalCopies, setTotalCopies] = useState(10);
-  const [coverUrl, setCoverUrl] = useState('https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  const [pdfFileName, setPdfFileName] = useState('');
+  const [pdfFileSize, setPdfFileSize] = useState<number | undefined>(undefined);
   const [synopsis, setSynopsis] = useState('');
+
+  // Upload & feedback states
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [pdfUploadProgress, setPdfUploadProgress] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const filteredBooks = books.filter((b) => {
     const q = search.toLowerCase();
@@ -45,6 +62,11 @@ export const BookManagement: React.FC = () => {
       b.category.toLowerCase().includes(q)
     );
   });
+
+  const resetUploadInputs = () => {
+    if (coverInputRef.current) coverInputRef.current.value = '';
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
+  };
 
   const handleOpenAdd = () => {
     setEditingBook(null);
@@ -58,8 +80,14 @@ export const BookManagement: React.FC = () => {
     setFormat('pdf');
     setClassLevel('Semua');
     setTotalCopies(10);
-    setCoverUrl('https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80');
+    setCoverUrl('');
+    setFileUrl('');
+    setPdfFileName('');
+    setPdfFileSize(undefined);
     setSynopsis('');
+    setFormError(null);
+    setPdfUploadProgress(0);
+    resetUploadInputs();
     setShowAddModal(true);
   };
 
@@ -72,58 +100,148 @@ export const BookManagement: React.FC = () => {
     setIsbn(book.isbn || '');
     setCategory(book.category);
     setPages(book.pages);
-    setFormat(book.format as any);
+    setFormat(book.format === 'physical' ? 'physical' : 'pdf');
     setClassLevel(book.classLevel);
     setTotalCopies(book.totalCopies);
-    setCoverUrl(book.coverUrl);
-    setSynopsis(book.synopsis);
+    setCoverUrl(book.coverUrl || '');
+    setFileUrl(book.fileUrl || '');
+    setPdfFileName(book.pdfFileName || (book.fileUrl ? 'Dokumen E-Book.pdf' : ''));
+    setPdfFileSize(book.pdfFileSize);
+    setSynopsis(book.synopsis || '');
+    setFormError(null);
+    setPdfUploadProgress(0);
+    resetUploadInputs();
     setShowAddModal(true);
+  };
+
+  const handleCoverFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFormError(null);
+    setIsUploadingCover(true);
+    try {
+      const compressedDataUrl = await compressCoverImage(file);
+      setCoverUrl(compressedDataUrl);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Gagal memproses foto sampul.');
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
+  const handlePdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFormError(null);
+    setIsUploadingPdf(true);
+    setPdfUploadProgress(10);
+    try {
+      const uploaded = await uploadPdfFile(file, (pct) => setPdfUploadProgress(pct));
+      setFileUrl(uploaded.fileUrl);
+      setPdfFileName(uploaded.fileName);
+      setPdfFileSize(uploaded.fileSize);
+      if (!title.trim()) {
+        const cleanTitle = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim();
+        if (cleanTitle) setTitle(cleanTitle);
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Gagal mengunggah file PDF.');
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
+
+  const handleRemovePdf = () => {
+    setFileUrl('');
+    setPdfFileName('');
+    setPdfFileSize(undefined);
+    setPdfUploadProgress(0);
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !author) return;
+    setFormError(null);
 
-    if (editingBook) {
-      const diff = totalCopies - editingBook.totalCopies;
-      const nextAvailable = Math.max(0, Math.min(totalCopies, editingBook.availableCopies + diff));
-      await updateBook(editingBook.id, {
-        title,
-        author,
-        publisher,
-        year,
-        isbn,
-        category,
-        pages,
-        format,
-        classLevel,
-        totalCopies,
-        availableCopies: nextAvailable,
-        coverUrl,
-        synopsis
-      });
-    } else {
-      await addBook({
-        title,
-        author,
-        publisher,
-        year,
-        isbn,
-        category,
-        pages,
-        format,
-        classLevel,
-        availableCopies: totalCopies,
-        totalCopies,
-        coverUrl,
-        synopsis,
-        rating: 5.0,
-        reviewCount: 0,
-        readsCount: 0
-      });
+    if (!title.trim() || !author.trim()) {
+      setFormError('Judul buku dan nama penulis wajib diisi.');
+      return;
     }
 
-    setShowAddModal(false);
+    if (!coverUrl) {
+      setFormError('Harap unggah foto cover buku terlebih dahulu.');
+      return;
+    }
+
+    if (format === 'pdf' && !fileUrl && !editingBook) {
+      setFormError('Untuk buku format E-Book, harap unggah file PDF terlebih dahulu.');
+      return;
+    }
+
+    if (isUploadingCover || isUploadingPdf) {
+      setFormError('Tunggu hingga proses unggah foto atau file PDF selesai.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (editingBook) {
+        const diff = totalCopies - editingBook.totalCopies;
+        const nextAvailable = Math.max(0, Math.min(totalCopies, editingBook.availableCopies + diff));
+        await updateBook(editingBook.id, {
+          title: title.trim(),
+          author: author.trim(),
+          publisher: publisher.trim(),
+          year,
+          isbn: isbn.trim(),
+          category,
+          pages,
+          format,
+          classLevel,
+          totalCopies,
+          availableCopies: nextAvailable,
+          coverUrl,
+          fileUrl: format === 'pdf' ? fileUrl || undefined : undefined,
+          pdfFileName: format === 'pdf' ? pdfFileName || undefined : undefined,
+          pdfFileSize: format === 'pdf' ? pdfFileSize : undefined,
+          synopsis: synopsis.trim()
+        });
+      } else {
+        await addBook({
+          title: title.trim(),
+          author: author.trim(),
+          publisher: publisher.trim(),
+          year,
+          isbn: isbn.trim(),
+          category,
+          pages,
+          format,
+          classLevel,
+          availableCopies: totalCopies,
+          totalCopies,
+          coverUrl,
+          ...(format === 'pdf' && fileUrl
+            ? {
+                fileUrl,
+                pdfFileName,
+                pdfFileSize
+              }
+            : {}),
+          synopsis: synopsis.trim(),
+          rating: 5.0,
+          reviewCount: 0,
+          readsCount: 0
+        });
+      }
+      setShowAddModal(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Gagal menyimpan data buku.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async (bookId: string) => {
@@ -163,7 +281,7 @@ export const BookManagement: React.FC = () => {
             Koleksi Buku & E-Book
           </h1>
           <p className="text-xs sm:text-sm text-gray-500">
-            Tambah judul baru, perbarui data eksemplar, atau ekspor inventaris buku
+            Tambah judul baru dengan unggah foto sampul & file PDF E-Book, kelola eksemplar, atau ekspor inventaris
           </p>
         </div>
 
@@ -222,7 +340,7 @@ export const BookManagement: React.FC = () => {
                       <img
                         src={book.coverUrl}
                         alt={book.title}
-                        className="w-10 h-14 object-cover rounded-lg shadow-xs shrink-0"
+                        className="w-10 h-14 object-cover rounded-lg shadow-xs shrink-0 bg-gray-100"
                       />
                       <div className="max-w-xs">
                         <p className="font-bold text-gray-900 line-clamp-2">{book.title}</p>
@@ -242,13 +360,21 @@ export const BookManagement: React.FC = () => {
                   </td>
 
                   <td className="p-4">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        book.format === 'pdf' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {book.format === 'pdf' ? 'E-Book PDF' : 'Cetak Fisik'}
-                    </span>
+                    <div className="flex flex-col items-start gap-1">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          book.format === 'pdf' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {book.format === 'pdf' ? 'E-Book PDF' : 'Cetak Fisik'}
+                      </span>
+                      {book.format === 'pdf' && book.fileUrl && (
+                        <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          <span>PDF Terunggah</span>
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   <td className="p-4">
@@ -306,12 +432,20 @@ export const BookManagement: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            {formError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Judul Buku:</label>
                 <input
                   type="text"
                   required
+                  placeholder="Contoh: Fiqih Muamalah Kontemporer"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-400"
@@ -324,6 +458,7 @@ export const BookManagement: React.FC = () => {
                   <input
                     type="text"
                     required
+                    placeholder="Nama pengarang"
                     value={author}
                     onChange={(e) => setAuthor(e.target.value)}
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-400"
@@ -359,7 +494,7 @@ export const BookManagement: React.FC = () => {
                   <label className="block font-bold text-gray-700 mb-1">Tingkat Kelas:</label>
                   <select
                     value={classLevel}
-                    onChange={(e) => setClassLevel(e.target.value as any)}
+                    onChange={(e) => setClassLevel(e.target.value as 'Semua' | 'X' | 'XI' | 'XII')}
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden"
                   >
                     <option value="Semua">Semua Kelas</option>
@@ -369,14 +504,14 @@ export const BookManagement: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Format:</label>
+                  <label className="block font-bold text-gray-700 mb-1">Jenis Koleksi:</label>
                   <select
                     value={format}
-                    onChange={(e) => setFormat(e.target.value as any)}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden"
+                    onChange={(e) => setFormat(e.target.value as 'pdf' | 'physical')}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden font-semibold text-purple-900"
                   >
-                    <option value="pdf">E-Book PDF</option>
-                    <option value="physical">Buku Cetak Fisik</option>
+                    <option value="pdf">E-Book (Upload PDF)</option>
+                    <option value="physical">Buku Fisik (Di Perpustakaan)</option>
                   </select>
                 </div>
               </div>
@@ -404,6 +539,7 @@ export const BookManagement: React.FC = () => {
                   <label className="block font-bold text-gray-700 mb-1">Total Eksemplar:</label>
                   <input
                     type="number"
+                    min={1}
                     value={totalCopies}
                     onChange={(e) => setTotalCopies(Number(e.target.value))}
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
@@ -411,15 +547,193 @@ export const BookManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">URL Cover Gambar:</label>
+              {/* Cover Photo Upload (Replaces URL input completely) */}
+              <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-gray-800 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-[#6546C7]" />
+                    <span>
+                      {format === 'physical'
+                        ? 'Foto Cover Buku Fisik (Wajib Unggah Foto):'
+                        : 'Foto Cover E-Book (Unggah Gambar):'}
+                    </span>
+                  </label>
+                  {coverUrl && (
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="text-[11px] font-bold text-[#6546C7] hover:underline"
+                    >
+                      Ganti Foto
+                    </button>
+                  )}
+                </div>
+
                 <input
-                  type="url"
-                  value={coverUrl}
-                  onChange={(e) => setCoverUrl(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverFileChange}
+                  className="hidden"
                 />
+
+                {coverUrl ? (
+                  <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-purple-100">
+                    <img
+                      src={coverUrl}
+                      alt="Pratinjau Cover Buku"
+                      className="w-16 h-22 object-cover rounded-lg border border-gray-200 shadow-xs shrink-0"
+                    />
+                    <div className="flex-1 space-y-1">
+                      <p className="font-bold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Foto Cover Siap Disimpan</span>
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Foto sampul otomatis dioptimalkan agar tampil cepat untuk seluruh santri.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => coverInputRef.current?.click()}
+                        className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold rounded-lg transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Unggah Ulang Foto</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isUploadingCover}
+                    onClick={() => coverInputRef.current?.click()}
+                    className="w-full py-5 px-4 border-2 border-dashed border-purple-300 hover:border-[#6546C7] bg-white hover:bg-purple-50/40 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-center"
+                  >
+                    {isUploadingCover ? (
+                      <>
+                        <Loader2 className="w-6 h-6 text-[#6546C7] animate-spin" />
+                        <span className="font-bold text-purple-900">Memproses foto sampul...</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-purple-100 text-[#6546C7] flex items-center justify-center">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-800">
+                            Klik untuk Unggah Foto Cover Buku
+                          </p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            Ambil foto langsung atau pilih gambar JPG / PNG / WebP dari perangkat Anda
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
+
+              {/* PDF E-Book File Upload when format === 'pdf' */}
+              {format === 'pdf' ? (
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-gray-800 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <span>Upload File E-Book (Format PDF):</span>
+                    </label>
+                    {fileUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemovePdf}
+                        className="text-[11px] font-bold text-rose-600 hover:underline"
+                      >
+                        Hapus File PDF
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={handlePdfFileChange}
+                    className="hidden"
+                  />
+
+                  {isUploadingPdf ? (
+                    <div className="bg-white p-4 rounded-xl border border-blue-200 space-y-2">
+                      <div className="flex items-center justify-between font-bold text-blue-900">
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                          <span>Mengunggah file PDF...</span>
+                        </span>
+                        <span>{pdfUploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-blue-100 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-blue-600 h-full transition-all duration-300"
+                          style={{ width: `${pdfUploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : fileUrl ? (
+                    <div className="bg-white p-3.5 rounded-xl border border-blue-200 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-gray-900 truncate">
+                            {pdfFileName || 'Dokumen E-Book.pdf'}
+                          </p>
+                          <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>
+                              Siap dibaca di E-Reader
+                              {pdfFileSize ? ` • ${formatFileSize(pdfFileSize)}` : ''}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => pdfInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg shrink-0"
+                      >
+                        Ganti PDF
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="w-full py-5 px-4 border-2 border-dashed border-blue-300 hover:border-blue-600 bg-white hover:bg-blue-50/40 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-center"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800">
+                          Klik untuk Upload File PDF E-Book
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Pilih file .pdf dari komputer atau perangkat Anda (maksimal 20 MB)
+                        </p>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-900 flex items-start gap-2.5">
+                  <BookOpen className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Mode Buku Cetak (Tersedia di Perpustakaan)</p>
+                    <p className="text-[11px] opacity-90 mt-0.5">
+                      Tidak perlu mengunggah file PDF. Gunakan fitur unggah foto di atas untuk memotret atau memilih sampul buku fisik.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Sinopsis & Ringkasan:</label>
@@ -427,6 +741,7 @@ export const BookManagement: React.FC = () => {
                   rows={3}
                   value={synopsis}
                   onChange={(e) => setSynopsis(e.target.value)}
+                  placeholder="Tuliskan ringkasan isi buku..."
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden"
                 />
               </div>
@@ -441,9 +756,11 @@ export const BookManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-[#6546C7] hover:bg-purple-700 text-white font-bold rounded-xl shadow-xs"
+                  disabled={isSubmitting || isUploadingCover || isUploadingPdf}
+                  className="flex-1 py-2.5 bg-[#6546C7] hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2"
                 >
-                  {editingBook ? 'Simpan Perubahan' : 'Tambahkan Buku'}
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{editingBook ? 'Simpan Perubahan' : 'Tambahkan Buku'}</span>
                 </button>
               </div>
             </form>

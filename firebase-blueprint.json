@@ -54,6 +54,8 @@
         "format": { "type": "string", "enum": ["pdf", "epub", "physical"] },
         "coverUrl": { "type": "string" },
         "fileUrl": { "type": "string" },
+        "pdfFileName": { "type": "string" },
+        "pdfFileSize": { "type": "number" },
         "availableCopies": { "type": "number" },
         "totalCopies": { "type": "number" },
         "classLevel": { "type": "string" },
