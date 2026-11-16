@@ -1,0 +1,6 @@
+{
+  "name": "E-Library MAZRAH - MA AZ ZAHRAH Pasuruan",
+  "description": "Digital Library & Learning Ecosystem untuk MA AZ ZAHRAH Kota Pasuruan dengan katalog buku digital, e-reader, peminjaman, gamifikasi literasi, dan analitik.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

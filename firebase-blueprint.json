@@ -1,0 +1,288 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role, school affiliation, and gamification points",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "guru", "siswa"] },
+        "classGrade": { "type": "string" },
+        "nisn": { "type": "string" },
+        "points": { "type": "number" },
+        "badges": { "type": "array" },
+        "booksReadCount": { "type": "number" },
+        "currentBorrowCount": { "type": "number" },
+        "readingStreakDays": { "type": "number" },
+        "lastReadDate": { "type": "string" },
+        "lastLoginDate": { "type": "string" },
+        "lastLoginBonusDate": { "type": "string" },
+        "lastDailyStreakRewardDate": { "type": "string" },
+        "dailyReadingGoalMinutes": { "type": "number" },
+        "todayMinutesRead": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "displayName", "role"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Admin authorization entry",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "Book": {
+      "title": "Book",
+      "description": "E-Library digital and physical book catalog item",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "publisher": { "type": "string" },
+        "year": { "type": "number" },
+        "isbn": { "type": "string" },
+        "category": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "pages": { "type": "number" },
+        "format": { "type": "string", "enum": ["pdf", "epub", "physical"] },
+        "coverUrl": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "availableCopies": { "type": "number" },
+        "totalCopies": { "type": "number" },
+        "classLevel": { "type": "string" },
+        "subject": { "type": "string" },
+        "isPopular": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "readsCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "author", "category"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Book category and classification",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "icon": { "type": "string" },
+        "bookCount": { "type": "number" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "slug"]
+    },
+    "Borrowing": {
+      "title": "Borrowing",
+      "description": "Book borrowing record and loan status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "userClass": { "type": "string" },
+        "bookId": { "type": "string" },
+        "bookTitle": { "type": "string" },
+        "bookCover": { "type": "string" },
+        "borrowDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "returnDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Menunggu", "Disetujui", "Ditolak", "Dipinjam", "Terlambat", "Dikembalikan"] },
+        "fineAmount": { "type": "number" },
+        "notes": { "type": "string" },
+        "verifiedBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "bookId", "bookTitle", "status"]
+    },
+    "ReadingHistory": {
+      "title": "ReadingHistory",
+      "description": "Student reading progress and history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bookId": { "type": "string" },
+        "bookTitle": { "type": "string" },
+        "bookCover": { "type": "string" },
+        "lastPage": { "type": "number" },
+        "totalPages": { "type": "number" },
+        "progressPercent": { "type": "number" },
+        "lastReadAt": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "timeSpentMinutes": { "type": "number" }
+      },
+      "required": ["userId", "bookId", "lastPage"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "Book marked as favorite by student or teacher",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bookId": { "type": "string" },
+        "bookTitle": { "type": "string" },
+        "bookCover": { "type": "string" },
+        "author": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "bookId"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Book review and rating by reader",
+      "type": "object",
+      "properties": {
+        "bookId": { "type": "string" },
+        "bookTitle": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["bookId", "userId", "rating", "comment"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Realtime user notification",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "link": { "type": "string" }
+      },
+      "required": ["userId", "title", "message"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Library official announcements",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "priority": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "content"]
+    },
+    "LiteracyChallenge": {
+      "title": "LiteracyChallenge",
+      "description": "Gamification reading challenge",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "targetBooks": { "type": "number" },
+        "targetDays": { "type": "number" },
+        "rewardPoints": { "type": "number" },
+        "badgeReward": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["title", "targetBooks", "rewardPoints"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System audit trail for administrative actions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userRole": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "timestamp"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Library configuration and rules",
+      "type": "object",
+      "properties": {
+        "appName": { "type": "string" },
+        "madrasahName": { "type": "string" },
+        "maxBorrowDays": { "type": "number" },
+        "maxBorrowBooks": { "type": "number" },
+        "finePerDay": { "type": "number" },
+        "dailyReadingTargetMinutes": { "type": "number" }
+      },
+      "required": ["appName", "madrasahName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with role, school details, and reading statistics"
+    },
+    "/admins/{userId}": {
+      "schema": "AdminRecord",
+      "description": "List of administrators and super administrators"
+    },
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "Collection of books in MAZRAH digital and physical library"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Book categories and genres"
+    },
+    "/borrowings/{borrowId}": {
+      "schema": "Borrowing",
+      "description": "Loan requests, active borrowings, and return history"
+    },
+    "/reading_history/{historyId}": {
+      "schema": "ReadingHistory",
+      "description": "Progress tracking and reading log per user per book"
+    },
+    "/favorites/{favoriteId}": {
+      "schema": "Favorite",
+      "description": "Bookmarked books by users"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Reader book reviews, ratings, and feedback"
+    },
+    "/notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "Realtime user notifications"
+    },
+    "/announcements/{annId}": {
+      "schema": "Announcement",
+      "description": "Madrasah library announcements"
+    },
+    "/challenges/{challengeId}": {
+      "schema": "LiteracyChallenge",
+      "description": "Gamification reading challenges"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Audit trails for admin and super admin operations"
+    },
+    "/settings/{settingId}": {
+      "schema": "SystemSetting",
+      "description": "Library operational configuration"
+    }
+  }
+}
